@@ -25,17 +25,40 @@ connectDB();
 // Security middleware
 app.use(helmet());
 
-// CORS configuration with multiple allowed origins and proper preflight handling
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || 'http://localhost:3000')
+// CORS configuration with support for comma-separated origins and optional regex
+// Example: ALLOWED_ORIGINS="https://*.onrender.com,https://my-site.com"
+const rawAllowed = process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || 'http://localhost:3000';
+const allowedOrigins = rawAllowed
     .split(',')
-    .map(o => o.trim())
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(pattern => {
+        if (pattern === '*' || pattern === 'ALL') return '*';
+        if (pattern.startsWith('/') && pattern.endsWith('/')) {
+            try { return new RegExp(pattern.slice(1, -1)); } catch { return null; }
+        }
+        if (pattern.includes('*')) {
+            // Convert simple wildcard to regex: https://*.onrender.com -> ^https://.*\.onrender\.com$
+            const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+            return new RegExp(`^${escaped}$`);
+        }
+        return pattern;
+    })
     .filter(Boolean);
+
+const isOriginAllowed = (origin) => {
+    for (const rule of allowedOrigins) {
+        if (rule === '*') return true;
+        if (rule instanceof RegExp && rule.test(origin)) return true;
+        if (typeof rule === 'string' && rule === origin) return true;
+    }
+    return false;
+};
 
 const corsOptions = {
     origin: (origin, callback) => {
-        // Allow non-browser requests or same-origin (no Origin header)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.includes(origin)) return callback(null, true);
+        if (isOriginAllowed(origin)) return callback(null, true);
         return callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
