@@ -26,8 +26,12 @@ connectDB();
 app.use(helmet());
 
 // CORS configuration with support for comma-separated origins and optional regex
-// Example: ALLOWED_ORIGINS="https://*.onrender.com,https://my-site.com"
-const rawAllowed = process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || 'http://localhost:3000';
+// Example: ALLOWED_ORIGINS="https://*.onrender.com,https://my-site.com,/https:\/\/api\\.example\\.com$/"
+// Sensible defaults: in production allow *.onrender.com if not explicitly configured; in dev allow localhost ports
+const defaultAllowed = env === 'production'
+    ? '/https:\\/\\/.*\\.onrender\\.com$/'
+    : 'http://localhost:3000,http://localhost:5173';
+const rawAllowed = process.env.ALLOWED_ORIGINS || process.env.CLIENT_URL || defaultAllowed;
 const allowedOrigins = rawAllowed
     .split(',')
     .map(s => s.trim())
